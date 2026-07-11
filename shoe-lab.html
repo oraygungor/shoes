@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shoe Lab</title>
+<style>
+:root{--bg:#0a0a0a;--card:#141414;--line:#292929;--text:#f5f5f5;--muted:#949494;--accent:#f6d400;--good:#163d26;--bad:#452020}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+button,input,textarea{font:inherit}.app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+aside{border-right:1px solid var(--line);padding:18px;overflow:auto}.brand{font-weight:800;font-size:18px;margin-bottom:18px}
+.brand span{color:var(--accent)}main{padding:22px;min-width:0}.muted{color:var(--muted)}
+input,textarea{width:100%;background:#0e0e0e;color:#fff;border:1px solid var(--line);border-radius:9px;padding:10px;outline:none}
+input:focus,textarea:focus{border-color:var(--accent)}button{border:1px solid var(--line);background:#1b1b1b;color:#fff;border-radius:9px;padding:9px 12px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#111;font-weight:800}button.danger{color:#ffb5b5}
+.row{display:flex;gap:8px}.row>*{min-width:0}.urlbox{display:grid;grid-template-columns:1fr auto;gap:8px;max-width:900px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-top:16px;overflow:hidden}
+.cardhead{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center}
+.cardbody{padding:16px}.shoe{display:flex;align-items:center;gap:9px;padding:9px;border:1px solid transparent;border-radius:9px;margin-bottom:5px}
+.shoe:hover,.shoe.active{background:#181818;border-color:var(--line)}.shoe input{width:15px}.shoe-name{flex:1;font-weight:650}.tiny{font-size:11px;color:var(--muted)}
+.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:820px}th,td{padding:10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:left}
+th{background:#181818;position:sticky;top:0}td:first-child,th:first-child{position:sticky;left:0;background:#171717;z-index:2;font-weight:650}
+.good{background:var(--good)}.bad{background:var(--bad)}.empty{padding:30px;text-align:center;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+textarea{min-height:110px;resize:vertical}.toolbar{display:flex;gap:7px;flex-wrap:wrap}.status{font-size:12px;color:var(--muted);margin-top:8px}
+.modal{position:fixed;inset:0;background:#000b;display:none;place-items:center;padding:16px;z-index:20}.modal.open{display:grid}
+.dialog{background:#111;border:1px solid var(--line);border-radius:14px;width:min(900px,100%);max-height:94vh;overflow:auto;padding:17px}
+.dialog h3{margin:0 0 14px}.notegrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:800px){.app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}.grid,.notegrid{grid-template-columns:1fr}.urlbox{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand">SHOE <span>LAB</span></div>
+  <div id="shoeList"></div>
+  <div class="toolbar" style="margin-top:14px">
+    <button id="allBtn">Tümü</button><button id="noneBtn">Temizle</button>
+  </div>
+  <div class="toolbar" style="margin-top:20px">
+    <button id="jsonBtn">JSON</button><button id="mdBtn">ChatGPT</button>
+    <label><button type="button" onclick="document.getElementById('importFile').click()">İçe aktar</button><input id="importFile" hidden type="file" accept=".json"></label>
+  </div>
+</aside>
+
+<main>
+  <h1 style="margin:0 0 4px">Ayakkabı karşılaştırma</h1>
+  <div class="muted">RunRepeat linkini yapıştır. Uygulama verileri çeker, ayrıştırır ve yerelde saklar.</div>
+
+  <div class="urlbox" style="margin-top:18px">
+    <input id="urlInput" placeholder="https://runrepeat.com/...">
+    <button class="primary" id="fetchBtn">Ayakkabıyı çek</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <section class="card">
+    <div class="cardhead"><strong>Karşılaştırma</strong><span class="tiny">Yeşil avantajlı, kırmızı zayıf değer</span></div>
+    <div id="comparison"></div>
+  </section>
+
+  <section class="card">
+    <div class="cardhead"><strong>Notlar</strong></div>
+    <div class="cardbody"><div id="notes"></div></div>
+  </section>
+</main>
+</div>
+
+<div class="modal" id="modal">
+  <div class="dialog">
+    <h3 id="dialogTitle">Ayakkabıyı kontrol et</h3>
+    <div class="grid" id="fields"></div>
+    <div class="notegrid" style="margin-top:14px">
+      <div class="field"><label>Kişisel yorum</label><textarea id="noteField" placeholder="Fit, stabilite, uzun koşu, yarış..."></textarea></div>
+      <div class="field"><label>Ek kaynak metni</label><textarea id="rawField" placeholder="Eksik veri varsa ilgili metni buraya yapıştırıp tekrar ayrıştır."></textarea>
+      <button id="parseAgain" style="margin-top:7px">Metni ayrıştır</button></div>
+    </div>
+    <div class="toolbar" style="justify-content:flex-end;margin-top:15px">
+      <button id="deleteBtn" class="danger">Sil</button><button id="cancelBtn">Kapat</button><button id="saveBtn" class="primary">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROXY_URL="PASTE_YOUR_WORKER_URL_HERE";
+const KEY="shoe-lab-minimal-v1";
+const metrics=[
+["midsoleWidthForefoot","Midsole width - forefoot","mm","high"],
+["torsionalRigidity","Torsional rigidity","Nm",null],
+["breathability","Breathability test","/5","high"],
+["weight","Weight","g","low"],
+["flexibility","Flexibility / Stiffness","N",null],
+["traction","Traction test","", "high"],
+["toeboxHeight","Toebox height","mm","high"],
+["toeboxWidth","Toebox width","mm","high"],
+["widthFit","Width / Fit","mm","high"],
+["sizeFit","Size to fit","",null],
+["midsoleSoftness","Midsole softness","AC",null],
+["drop","Drop","mm",null],
+["energyReturn","Energy return","%","high"],
+["shockAbsorption","Shock absorption - heel","SA","high"]
+];
+let db={shoes:[],selected:[]},editing=null;
+try{db=JSON.parse(localStorage.getItem(KEY))||db}catch{}
+const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const saveDB=()=>localStorage.setItem(KEY,JSON.stringify(db));
+const n=v=>{const x=parseFloat(String(v??"").replace(",","."));return Number.isFinite(x)?x:null};
+function setStatus(s){$("status").textContent=s}
+function strip(html){const d=document.createElement("div");d.innerHTML=html;d.querySelectorAll("script,style,svg,noscript").forEach(x=>x.remove());return (d.innerText||d.textContent||"").replace(/\s+/g," ")}
+function pick(t,arr){for(const r of arr){const m=t.match(r);if(m)return m[1].replace(",",".")}return ""}
+function parse(raw,url){
+ const t=/<[a-z][\s\S]*>/i.test(raw)?strip(raw):raw.replace(/\s+/g," ");
+ const title=(raw.match(/<title[^>]*>(.*?)<\/title>/i)||[])[1]||"";
+ let name=title.replace(/Cut in half:\s*/i,"").replace(/\s*Review.*$/i,"").replace(/<[^>]+>/g,"").trim();
+ if(!name){name=pick(t,[/([A-Z][A-Za-z0-9 .+\-']{2,60}) review/i])}
+ return {
+  id:crypto.randomUUID(),name:name||new URL(url).pathname.split("/").filter(Boolean).pop().replaceAll("-"," "),
+  url,createdAt:new Date().toISOString(),note:"",
+  midsoleWidthForefoot:pick(t,[/Midsole width\s*-\s*forefoot[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*mm/i]),
+  torsionalRigidity:pick(t,[/Torsional rigidity[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*Nm/i]),
+  breathability:pick(t,[/Breathability(?: test)?[^0-9]{0,100}([1-5](?:[.,][0-9]+)?)\s*\/\s*5/i]),
+  weight:pick(t,[/Weight[^0-9]{0,140}([0-9]{2,4})\s*g\b/i]),
+  flexibility:pick(t,[/Flexibility\s*\/\s*Stiffness[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*N\b/i]),
+  traction:pick(t,[/Traction test[^0-9]{0,140}([0-9](?:[.,][0-9]+)?)/i,/Forefoot traction[^0-9]{0,140}([0-9](?:[.,][0-9]+)?)/i]),
+  toeboxHeight:pick(t,[/Toebox height[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*mm/i]),
+  toeboxWidth:pick(t,[/Toebox width[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*mm/i]),
+  widthFit:pick(t,[/Width\s*\/\s*Fit[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*mm/i]),
+  sizeFit:pick(t,[/(True to size|Slightly small|Slightly large|Half size small|Half size large)/i]),
+  midsoleSoftness:pick(t,[/Midsole softness[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*AC/i]),
+  drop:pick(t,[/Drop[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*mm/i]),
+  energyReturn:pick(t,[/Energy return[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*%/i]),
+  shockAbsorption:pick(t,[/Shock absorption(?:\s*-\s*heel)?[^0-9]{0,140}([0-9]+(?:[.,][0-9]+)?)\s*SA/i])
+ }
+}
+async function fetchShoe(){
+ const url=$("urlInput").value.trim(); if(!url)return setStatus("Önce link gir.");
+ if(PROXY_URL.includes("PASTE_"))return setStatus("Önce HTML dosyasındaki PROXY_URL alanına Worker adresini yaz.");
+ setStatus("Sayfa çekiliyor...");
+ try{
+  const r=await fetch(PROXY_URL+"?url="+encodeURIComponent(url));
+  if(!r.ok)throw new Error(await r.text());
+  const raw=await r.text(), shoe=parse(raw,url);
+  editing=shoe;openEditor(shoe);setStatus("Veri çekildi. Kontrol edip kaydet.");
+ }catch(e){setStatus("Çekilemedi: "+e.message)}
+}
+function openEditor(s){
+ editing=s;$("dialogTitle").textContent=s.name||"Ayakkabıyı kontrol et";
+ $("fields").innerHTML=`<div class="field"><label>Ayakkabı adı</label><input data-k="name" value="${esc(s.name)}"></div>`+
+ metrics.map(m=>`<div class="field"><label>${m[1]} ${m[2]?"("+m[2]+")":""}</label><input data-k="${m[0]}" value="${esc(s[m[0]]||"")}"></div>`).join("");
+ $("noteField").value=s.note||"";$("rawField").value="";$("modal").classList.add("open");
+}
+function collect(){document.querySelectorAll("[data-k]").forEach(i=>editing[i.dataset.k]=i.value.trim());editing.note=$("noteField").value.trim()}
+function render(){
+ $("shoeList").innerHTML=db.shoes.length?db.shoes.map(s=>`<div class="shoe ${editing?.id===s.id?"active":""}">
+ <input type="checkbox" ${db.selected.includes(s.id)?"checked":""} onchange="toggle('${s.id}',this.checked)">
+ <div class="shoe-name" onclick="edit('${s.id}')">${esc(s.name)}<div class="tiny">${metrics.filter(m=>s[m[0]]).length}/${metrics.length} veri</div></div>
+ </div>`).join(""):`<div class="tiny">Henüz ayakkabı yok.</div>`;
+ const shoes=db.shoes.filter(s=>db.selected.includes(s.id));
+ if(!shoes.length){$("comparison").innerHTML='<div class="empty">Soldan ayakkabı seç.</div>'}
+ else{
+  let h='<div class="tablewrap"><table><thead><tr><th>Özellik</th>'+shoes.map(s=>`<th>${esc(s.name)}</th>`).join("")+'</tr></thead><tbody>';
+  for(const m of metrics){
+   const vals=shoes.map(s=>n(s[m[0]])).filter(v=>v!==null),best=m[3]==="high"?Math.max(...vals):m[3]==="low"?Math.min(...vals):null,worst=m[3]==="high"?Math.min(...vals):m[3]==="low"?Math.max(...vals):null;
+   h+=`<tr><td>${m[1]} <span class="tiny">${m[2]}</span></td>`;
+   for(const s of shoes){const v=n(s[m[0]]);let c="";if(vals.length>1&&m[3]&&v!==null)c=v===best?"good":v===worst?"bad":"";h+=`<td class="${c}">${esc(s[m[0]]||"—")}</td>`}h+="</tr>";
+  }$("comparison").innerHTML=h+"</tbody></table></div>";
+ }
+ $("notes").innerHTML=shoes.length?shoes.map(s=>`<div style="margin-bottom:14px"><strong>${esc(s.name)}</strong><textarea oninput="note('${s.id}',this.value)" placeholder="Kişisel yorum...">${esc(s.note||"")}</textarea></div>`).join(""):'<div class="tiny">Seçili ayakkabı yok.</div>';
+}
+window.toggle=(id,on)=>{db.selected=on?[...new Set([...db.selected,id])]:db.selected.filter(x=>x!==id);saveDB();render()}
+window.edit=id=>{editing={...db.shoes.find(s=>s.id===id)};openEditor(editing)}
+window.note=(id,v)=>{const s=db.shoes.find(x=>x.id===id);s.note=v;saveDB()}
+$("fetchBtn").onclick=fetchShoe;
+$("saveBtn").onclick=()=>{collect();const i=db.shoes.findIndex(s=>s.id===editing.id);if(i<0){db.shoes.push(editing);db.selected.push(editing.id)}else db.shoes[i]=editing;saveDB();$("modal").classList.remove("open");render();setStatus("Kaydedildi.");}
+$("cancelBtn").onclick=()=>$("modal").classList.remove("open");
+$("deleteBtn").onclick=()=>{if(!editing||!confirm("Silinsin mi?"))return;db.shoes=db.shoes.filter(s=>s.id!==editing.id);db.selected=db.selected.filter(id=>id!==editing.id);saveDB();$("modal").classList.remove("open");render()}
+$("parseAgain").onclick=()=>{const raw=$("rawField").value.trim();if(!raw)return;collect();const p=parse(raw,editing.url);for(const m of metrics)if(p[m[0]])editing[m[0]]=p[m[0]];openEditor(editing)}
+$("allBtn").onclick=()=>{db.selected=db.shoes.map(s=>s.id);saveDB();render()}
+$("noneBtn").onclick=()=>{db.selected=[];saveDB();render()}
+function dl(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
+$("jsonBtn").onclick=()=>dl("shoe-lab-backup.json",JSON.stringify(db,null,2),"application/json")
+$("mdBtn").onclick=()=>{let x="# Shoe comparison\n\n";for(const s of db.shoes){x+=`## ${s.name}\n\nSource: ${s.url}\n\n| Metric | Value |\n|---|---|\n`;for(const m of metrics)x+=`| ${m[1]} | ${s[m[0]]||"—"} ${m[2]} |\n`;x+=`\n### My feedback\n\n${s.note||"—"}\n\n`}dl("shoe-comparison-chatgpt.md",x,"text/markdown")}
+$("importFile").onchange=async e=>{try{db=JSON.parse(await e.target.files[0].text());saveDB();render()}catch{alert("Geçersiz JSON")}}
+render();
+</script>
+</body>
+</html>
